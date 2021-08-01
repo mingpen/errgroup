@@ -27,10 +27,6 @@ func main() {
 	})
 
 	// 监听 signal事件
-	onInterrupt := func() {
-		err := httpServer.Shutdown(context.Background())
-		log.Println("httpServer Shutdown return:", err)
-	}
 	g.Go(func() error {
 		log.Println("in signal.Notify routine ")
 		c := make(chan os.Signal, 1)
@@ -44,7 +40,7 @@ func main() {
 				log.Println("one signal:", s.String())
 			}
 			if os.Interrupt == s {
-				onInterrupt() // 响应
+				// onInterrupt() // 响应退出 (为了解耦提到外面)
 				return errors.New("Interrupt")
 			}
 		case <-ctx.Done():
@@ -54,7 +50,20 @@ func main() {
 		return nil
 	})
 
+	// 由于http server 里面直接封装了，没法接入其他的一个goroutine监听group的异常
+	onInterrupt := func() { // 响应其他goroutine failed
+		err := httpServer.Shutdown(context.Background())
+		log.Println("httpServer Shutdown return:", err)
+	}
+	g.Go(func() error {
+		log.Println("onInterrupt start")
+		<-ctx.Done()
+		onInterrupt()
+		log.Println("onInterrupt over:", ctx.Err())
+		return ctx.Err()
+	})
+
 	// 等待启动的routine全部结束
 	err := g.Wait()
-	log.Println("Exit with ", err)
+	log.Println(">>Exit with ", err)
 }
