@@ -20,6 +20,7 @@ func main() {
 
 	// 启动http服务
 	g.Go(func() error {
+		log.Println("in httpServer routine ,before ListenAndServe")
 		err := httpServer.ListenAndServe()
 		log.Println("httpserver routine ,over:", err)
 		return err
@@ -27,26 +28,33 @@ func main() {
 
 	// 监听 signal事件
 	onInterrupt := func() {
-		err := httpServer.Shutdown(ctx)
+		err := httpServer.Shutdown(context.Background())
 		log.Println("httpServer Shutdown return:", err)
 	}
-	//
 	g.Go(func() error {
+		log.Println("in signal.Notify routine ")
 		c := make(chan os.Signal, 1)
 		signal.Notify(c)
+		defer func() {
+			signal.Stop(c)
+		}()
 		select {
 		case s := <-c:
+			if s != nil {
+				log.Println("one signal:", s.String())
+			}
 			if os.Interrupt == s {
 				onInterrupt() // 响应
 				return errors.New("Interrupt")
 			}
-			log.Println(s.String())
 		case <-ctx.Done():
 			break
 		}
 		log.Println("in signal.Notify,Other Error:", ctx.Err())
 		return nil
 	})
+
+	// 等待启动的routine全部结束
 	err := g.Wait()
 	log.Println("Exit with ", err)
 }
