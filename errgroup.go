@@ -34,17 +34,20 @@ func main() {
 		defer func() {
 			signal.Stop(c)
 		}()
-		select {
-		case s := <-c:
-			if s != nil {
-				log.Println("one signal:", s.String())
+
+		for stop := false; !stop; {
+			select {
+			case s := <-c:
+				if s != nil {
+					log.Println("one signal:", s.String())
+				}
+				if os.Interrupt == s {
+					// onInterrupt() // 响应退出 (为了解耦提到外面)
+					return errors.New("Interrupt")
+				}
+			case <-ctx.Done():
+				stop = true
 			}
-			if os.Interrupt == s {
-				// onInterrupt() // 响应退出 (为了解耦提到外面)
-				return errors.New("Interrupt")
-			}
-		case <-ctx.Done():
-			break
 		}
 		log.Println("in signal.Notify,Other Error:", ctx.Err())
 		return nil
